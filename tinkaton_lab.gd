@@ -1,5 +1,8 @@
 extends "res://camera_lab.gd"
 
+const CHARACTER_LIFT := 1.46
+const DEFAULT_TARGET := Vector3(-2.73, 0.5, -1.23)
+@export var idle_mode := false
 var animation: AnimationPlayer
 var clip: StringName
 var playhead := 0.0
@@ -16,10 +19,18 @@ var exporting := false
 func _ready() -> void:
 	super._ready()
 	zoom = 10.5
-	target = Vector3(-2, 0.5, -0.5)
-	$Sun.light_energy = 0.65
-	$WorldEnvironment.environment.ambient_light_energy = 0.3
+	target = DEFAULT_TARGET
+	# Rembrandt-inspired key: 45 degrees to the front/side, 45 above the ground.
+	$Sun.position = Vector3(-4, sqrt(32.0), 4)
+	$Sun.look_at(Vector3.ZERO, Vector3.UP)
+	$Sun.light_energy = 0.9
+	$Sun.light_color = Color(1.0, 0.95, 0.9)
+	$Sun.shadow_enabled = false
+	$WorldEnvironment.environment.ambient_light_color = Color(0.72, 0.8, 1.0)
+	$WorldEnvironment.environment.ambient_light_energy = 0.35
 	$WorldEnvironment.environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	$WorldEnvironment.environment.background_mode = Environment.BG_COLOR
+	$WorldEnvironment.environment.background_color = Color("ffff00")
 	_update_camera()
 	if "--capture" in OS.get_cmdline_user_args():
 		_capture_preview.call_deferred()
@@ -35,6 +46,10 @@ func _update_camera() -> void:
 
 
 func _capture_preview() -> void:
+	if idle_mode:
+		await _export_still()
+		get_tree().quit()
+		return
 	playing = false
 	for sample in [0.0, 0.875, 1.2917]:
 		playhead = sample
@@ -76,14 +91,32 @@ func _export_sheet() -> void:
 	exporting = false
 
 
+func _export_still() -> void:
+	if exporting:
+		return
+	exporting = true
+	controls_layer.hide()
+	await get_tree().process_frame
+	await RenderingServer.frame_post_draw
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://references"))
+	get_viewport().get_texture().get_image().save_png("res://references/tinkaton_sem_martelo.png")
+	controls_layer.show()
+	exporting = false
+
+
 func _build_world() -> void:
 	geometry.get_node("ReferenceCube").hide()
-	for x in range(-5, 5):
-		for z in range(-5, 5):
-			_box(Vector3(x + 0.5, 0, z + 0.5), Vector3(0.98, 0.02, 0.98), Color("485257") if (x + z) % 2 == 0 else Color("515e62"))
-	character = load("res://assets/tinkaton/tinkaton.glb").instantiate()
+	geometry.get_node("Floor").hide()
+	var model_path := "res://assets/tinkaton/tinkaton_idle.glb" if idle_mode else "res://assets/tinkaton/tinkaton.glb"
+	character = load(model_path).instantiate()
+	# Lowest hammer vertex over the 61 sampled poses was -1.404 units.
+	# Lift the whole character to retain > 0.05 units above the ground plane.
+	character.position.y = CHARACTER_LIFT
 	geometry.add_child(character)
 	_apply_toon(character)
+	if idle_mode:
+		playing = false
+		return
 	animation = _find_animation(character)
 	if animation:
 		for name in animation.get_animation_list():
@@ -118,6 +151,10 @@ func _apply_toon(node: Node) -> void:
 				material.shader = load("res://toon_reference.gdshader")
 				material.set_shader_parameter("albedo_texture", original.albedo_texture)
 				material.set_shader_parameter("tint", original.albedo_color)
+				if "eye" not in node.name.to_lower():
+					var outline := ShaderMaterial.new()
+					outline.shader = load("res://anime_outline.gdshader")
+					material.next_pass = outline
 				node.set_surface_override_material(surface, material)
 	for child in node.get_children():
 		_apply_toon(child)
@@ -151,8 +188,12 @@ func _build_ui() -> void:
 	column.add_theme_constant_override("separation", 9)
 	margin.add_child(column)
 	var title := Label.new()
-	title.text = "TINKATON · MARTELO\nReferência para desenho"
+	title.text = "TINKATON · SEM MARTELO\nPose parada para desenho" if idle_mode else "TINKATON · MARTELO\nReferência para desenho"
 	column.add_child(title)
+	var switch_scene := Button.new()
+	switch_scene.text = "Ver martelada" if idle_mode else "Ver parado sem martelo"
+	switch_scene.pressed.connect(func(): get_tree().change_scene_to_file("res://tinkaton_lab.tscn" if idle_mode else "res://tinkaton_idle.tscn"))
+	column.add_child(switch_scene)
 	frame_label = Label.new()
 	column.add_child(frame_label)
 	var pause := Button.new()
@@ -189,6 +230,19 @@ func _build_ui() -> void:
 	help.text = "Espaço: pausar · ← / →: quadro\nRoda: zoom · WASD: mover câmera\nR: restaurar enquadramento\n\nProjeção oblíqua aprovada.\nA martelada repete automaticamente."
 	help.add_theme_font_size_override("font_size", 14)
 	column.add_child(help)
+	if idle_mode:
+		# Hide animation-only controls; pixel and direction controls stay available.
+		frame_label.hide()
+		pause.hide()
+		timeline.hide()
+		buttons.hide()
+		var speed_label := sliders[0].get_index() - 1
+		column.get_child(speed_label).hide()
+		sliders[0].hide()
+		export_button.text = "Salvar pose parada em PNG"
+		export_button.pressed.disconnect(_export_sheet)
+		export_button.pressed.connect(_export_still)
+		help.text = "Roda: zoom · WASD: mover câmera\nR: restaurar enquadramento\n\nPose fixa, sem martelo.\nMesma projeção e iluminação a 45°."
 
 
 func _pose() -> void:
@@ -226,7 +280,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_R:
 				_oblique_preset()
 				zoom = 10.5
-				target = Vector3(-2, 0.5, -0.5)
+				target = DEFAULT_TARGET
 				_update_camera()
 		return
 	super._unhandled_input(event)

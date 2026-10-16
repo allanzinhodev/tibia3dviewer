@@ -80,7 +80,9 @@ for frame in range(1,62):
     grip = Vector((0,.42 + crouch,.28))
     rot = Matrix.Rotation(math.radians(angle),4,'X')
     hammer = rig.pose.bones['feeler_01']
-    hammer.matrix = Matrix.Translation(grip) @ rot @ Matrix.Translation(-rest['feeler_01'].translation) @ rest['feeler_01']
+    # Turn the hammer around its handle, without changing the forward swing.
+    hammer_twist = Matrix.Rotation(math.radians(-90), 4, 'Y')
+    hammer.matrix = Matrix.Translation(grip) @ rot @ hammer_twist @ Matrix.Translation(-rest['feeler_01'].translation) @ rest['feeler_01']
     bpy.context.view_layer.update()
     for side,sign in [('left',1),('right',-1)]:
         upper=side+'_arm_01'; lower=side+'_arm_02'; hand=side+'_hand'
