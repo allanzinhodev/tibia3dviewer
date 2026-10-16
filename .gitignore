@@ -1,0 +1,10 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+.tools/
+*.log
+*.blend1
+__pycache__/
+/inspect_model.py
+/model_report.json
+/assets/tinkaton/initial*

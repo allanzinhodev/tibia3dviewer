@@ -1,0 +1,48 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://camera_lab.gd" id="1"]
+
+[sub_resource type="Environment" id="Environment_lab"]
+background_mode = 1
+background_color = Color(0.075, 0.095, 0.12, 1)
+ambient_light_source = 3
+ambient_light_color = Color(0.8, 0.87, 1, 1)
+ambient_light_energy = 0.65
+tonemap_mode = 2
+
+[sub_resource type="BoxMesh" id="Box_cube"]
+
+[sub_resource type="StandardMaterial3D" id="Material_cube"]
+albedo_color = Color(0.95, 0.57, 0.22, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="Box_floor"]
+size = Vector3(12, 0.1, 12)
+
+[node name="CameraLab" type="Node3D"]
+script = ExtResource("1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_lab")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-55, -30, 0)
+light_energy = 1.2
+shadow_enabled = true
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+position = Vector3(0, -0.06, 0)
+mesh = SubResource("Box_floor")
+
+[node name="ReferenceCube" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.5, 0)
+mesh = SubResource("Box_cube")
+material_override = SubResource("Material_cube")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(15.30931, 13, 15.30931)
+rotation_degrees = Vector3(-30, 45, 0)
+projection = 1
+size = 12.0
+current = true
+far = 200.0
